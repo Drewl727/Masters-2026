@@ -328,6 +328,55 @@
     .prob-table, .summary-table { font-size: 0.75rem; }
     .prob-table td, .summary-table td { padding: 6px 8px; }
   }
+
+  .site-nav {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .site-nav .nav-current { color: var(--gold); font-weight: 600; }
+  .site-nav .nav-divider { color: var(--border); }
+  .site-nav a {
+    color: var(--text-dim);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .site-nav a:hover { color: var(--gold); }
+  .live-badge {
+    background: rgba(255,51,51,0.15);
+    border: 1px solid rgba(255,51,51,0.4);
+    color: #ff5555;
+    padding: 1px 8px;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .live-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background: #ff3333;
+    border-radius: 50%;
+    animation: nbpulse 1.5s ease-in-out infinite;
+  }
+  @keyframes nbpulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
 </style>
 </head>
 <body>
@@ -337,6 +386,12 @@
   <div class="sub">Augusta National &middot; April 9&ndash;12</div>
   <div class="date">Odds pulled April 8, 2026 &middot; DraftKings primary &middot; RI-legal books prioritized</div>
 </div>
+
+<nav class="site-nav">
+  <span class="nav-current">Betting Card</span>
+  <span class="nav-divider">|</span>
+  <a href="tracker.html"><span class="live-badge">Live</span> Bet Tracker &#8594;</a>
+</nav>
 
 <div class="container">
 

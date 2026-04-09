@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2026 Masters Live Bet Tracker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Source+Serif+4:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --green: #006747;
+    --green-dark: #004d35;
+    --green-light: #1a7a5a;
+    --gold: #d4af37;
+    --gold-light: #e8c84a;
+    --bg: #0a0f0d;
+    --bg-card: #111916;
+    --bg-card-alt: #151f1a;
+    --text: #e8ede9;
+    --text-dim: #8fa396;
+    --text-bright: #ffffff;
+    --red: #c0392b;
+    --red-soft: #e74c3c;
+    --blue: #2980b9;
+    --border: #1e2e26;
+    --positive: #27ae60;
+    --negative: #c0392b;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Source Serif 4', Georgia, serif;
+    line-height: 1.6;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    background: linear-gradient(135deg, var(--green-dark) 0%, var(--green) 50%, var(--green-light) 100%);
+    padding: 36px 24px 28px;
+    text-align: center;
+    border-bottom: 3px solid var(--gold);
+    position: relative;
+    overflow: hidden;
+  }
+  .header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(45deg, transparent, transparent 40px, rgba(0,0,0,0.03) 40px, rgba(0,0,0,0.03) 80px);
+  }
+  .header h1 {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 2.4rem;
+    color: var(--text-bright);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }
+  .live-dot {
+    width: 12px;
+    height: 12px;
+    background: #ff3333;
+    border-radius: 50%;
+    flex-shrink: 0;
+    animation: pulse 1.5s ease-in-out infinite;
+    box-shadow: 0 0 8px #ff3333;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.75); }
+  }
+  .header .sub {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 300;
+    font-size: 1rem;
+    color: var(--gold);
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    margin-top: 6px;
+    position: relative;
+  }
+  .header .meta {
+    font-size: 0.78rem;
+    color: rgba(255,255,255,0.5);
+    margin-top: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    position: relative;
+  }
+
+  /* ── NAV ── */
+  .site-nav {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .site-nav a { color: var(--text-dim); text-decoration: none; }
+  .site-nav a:hover { color: var(--gold); }
+  .site-nav .divider { color: var(--border); }
+  .site-nav .current { color: var(--gold); font-weight: 600; }
+
+  /* ── CONTAINER ── */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px 16px 48px;
+  }
+
+  /* ── STATUS BAR ── */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 18px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+  }
+  .status-bar .last-updated { color: var(--text-dim); }
+  .badge {
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.72rem;
+    font-family: 'Oswald', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .badge-round { background: rgba(0,103,71,0.3); border: 1px solid var(--green); color: var(--text-bright); }
+  .badge-api   { background: rgba(39,174,96,0.18); border: 1px solid var(--positive); color: var(--positive); }
+  .badge-manual{ background: rgba(212,175,55,0.14); border: 1px solid var(--gold); color: var(--gold); }
+  .badge-error { background: rgba(192,57,43,0.18); border: 1px solid var(--red); color: var(--red-soft); }
+  .badge-pending{ background: rgba(41,128,185,0.15); border: 1px solid var(--blue); color: #5dade2; }
+  .spacer { flex: 1; }
+  .refresh-btn {
+    background: rgba(0,103,71,0.2);
+    border: 1px solid var(--green);
+    color: var(--text-bright);
+    padding: 5px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: background 0.2s;
+  }
+  .refresh-btn:hover { background: rgba(0,103,71,0.4); }
+  .refresh-btn.spinning .spin-icon { display: inline-block; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── SUMMARY GRID ── */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 14px;
+    text-align: center;
+  }
+  .stat-card .slabel {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    margin-bottom: 5px;
+  }
+  .stat-card .sval {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.55rem;
+    font-weight: 500;
+    line-height: 1;
+  }
+  .stat-card .ssub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+  .stat-card.s-total  { }
+  .stat-card.s-total .sval { color: var(--text-bright); }
+  .stat-card.s-cashing{ border-color: rgba(39,174,96,0.35); }
+  .stat-card.s-cashing .sval { color: var(--positive); }
+  .stat-card.s-alive  { border-color: rgba(212,175,55,0.35); }
+  .stat-card.s-alive .sval { color: var(--gold); }
+  .stat-card.s-dead   { border-color: rgba(192,57,43,0.35); }
+  .stat-card.s-dead .sval { color: var(--red-soft); }
+
+  /* ── SECTION HEADER ── */
+  .section-header {
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    margin-bottom: 14px;
+    margin-top: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .section-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: var(--text-dim);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  /* ── PLAYER TABLE ── */
+  .tracker-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+  }
+  .tracker-table th {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    text-align: left;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.68rem;
+    white-space: nowrap;
+  }
+  .tracker-table td {
+    padding: 10px 10px;
+    border-bottom: 1px solid rgba(30,46,38,0.4);
+    vertical-align: middle;
+  }
+  .tracker-table tr:hover { background: rgba(0,103,71,0.07); }
+  .col-pos   { width: 52px; font-family: 'JetBrains Mono', monospace; font-size: 0.92rem; font-weight: 500; color: var(--text-bright); }
+  .col-name  { font-family: 'Source Serif 4', serif; font-weight: 600; color: var(--text-bright); font-size: 0.9rem; }
+  .col-score { width: 56px; font-family: 'JetBrains Mono', monospace; font-size: 0.88rem; }
+  .col-today { width: 56px; font-family: 'JetBrains Mono', monospace; font-size: 0.88rem; }
+  .col-thru  { width: 48px; font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text-dim); }
+  .score-under { color: var(--positive); }
+  .score-over  { color: var(--red-soft); }
+  .score-even  { color: var(--text-dim); }
+  .row-mc { opacity: 0.45; }
+  .row-mc .col-name { text-decoration: line-through; }
+
+  /* bet chips inside player table */
+  .bet-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    border: 1px solid;
+  }
+  .chip-cashing { background: rgba(39,174,96,0.18);  border-color: var(--positive); color: var(--positive); }
+  .chip-alive   { background: rgba(212,175,55,0.1);  border-color: rgba(212,175,55,0.5); color: var(--gold); }
+  .chip-dead    { background: rgba(192,57,43,0.12);  border-color: rgba(192,57,43,0.4); color: var(--red-soft); text-decoration: line-through; }
+  .chip-pending { background: rgba(41,128,185,0.12); border-color: rgba(41,128,185,0.4); color: #5dade2; }
+
+  /* ── BET BREAKDOWN ── */
+  .bet-group { margin-bottom: 18px; }
+  .group-header {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    padding: 6px 12px;
+    border-radius: 3px;
+    margin-bottom: 7px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .group-header.cashing { background: rgba(39,174,96,0.12);  border: 1px solid rgba(39,174,96,0.28);  color: var(--positive); }
+  .group-header.alive   { background: rgba(212,175,55,0.08); border: 1px solid rgba(212,175,55,0.22); color: var(--gold); }
+  .group-header.dead    { background: rgba(192,57,43,0.1);   border: 1px solid rgba(192,57,43,0.24);  color: var(--red-soft); }
+  .group-header.pending { background: rgba(41,128,185,0.1);  border: 1px solid rgba(41,128,185,0.24); color: #5dade2; }
+  .sdot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  }
+  .sdot-cashing { background: var(--positive); box-shadow: 0 0 5px var(--positive); }
+  .sdot-alive   { background: var(--gold); }
+  .sdot-dead    { background: var(--red); }
+  .sdot-pending { background: var(--blue); }
+
+  .bet-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 8px 14px;
+    align-items: center;
+    padding: 10px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 5px;
+  }
+  .bet-row .bplayer {
+    font-family: 'Source Serif 4', serif;
+    font-weight: 600;
+    color: var(--text-bright);
+    font-size: 0.88rem;
+  }
+  .bet-row .bmarket {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-top: 1px;
+  }
+  .bet-row .bodds {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--gold);
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+  .bet-row .bunits {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-dim);
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+  .bet-row .bprofit {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    font-weight: 500;
+    white-space: nowrap;
+    text-align: right;
+  }
+  .bprofit-pos { color: var(--positive); }
+  .bprofit-neg { color: var(--red-soft); }
+  .bprofit-dim { color: var(--text-dim); }
+
+  /* ── NO DATA ── */
+  .no-data {
+    text-align: center;
+    padding: 36px 20px;
+    color: var(--text-dim);
+    font-family: 'Oswald', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-size: 0.85rem;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+  }
+
+  /* ── CALLOUT ── */
+  .callout {
+    background: rgba(212,175,55,0.05);
+    border: 1px solid rgba(212,175,55,0.18);
+    border-left: 3px solid var(--gold);
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+    font-size: 0.83rem;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.5;
+  }
+
+  /* ── MANUAL SECTION ── */
+  .manual-toggle-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 5px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+  .manual-toggle-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+  .manual-form { display: none; margin-top: 4px; }
+  .manual-form.open { display: block; }
+
+  .round-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .round-selector .rlabel {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .round-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 4px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+  .round-btn.active { background: var(--green); border-color: var(--green); color: #fff; }
+  .round-btn:hover:not(.active) { border-color: var(--gold); color: var(--gold); }
+
+  .manual-grid {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    margin-bottom: 14px;
+  }
+  .manual-grid th {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+  }
+  .manual-grid td { padding: 5px 8px; border-bottom: 1px solid rgba(30,46,38,0.3); }
+  .manual-grid .mplayer {
+    font-family: 'Source Serif 4', serif;
+    color: var(--text);
+    font-size: 0.84rem;
+    white-space: nowrap;
+  }
+  .minput {
+    background: rgba(0,103,71,0.07);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 5px 7px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .minput:focus { border-color: var(--green); }
+  .btn-apply {
+    background: var(--green);
+    border: none;
+    color: #fff;
+    padding: 9px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: background 0.2s;
+  }
+  .btn-apply:hover { background: var(--green-light); }
+  .btn-clear {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 9px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+  .btn-clear:hover { border-color: var(--red); color: var(--red-soft); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .header h1 { font-size: 1.7rem; }
+    .summary-grid { grid-template-columns: 1fr 1fr; }
+    .tracker-table .hide-mobile { display: none; }
+    .bet-row { grid-template-columns: 1fr auto; }
+    .bet-row .bodds, .bet-row .bunits { display: none; }
+  }
+  @media (max-width: 480px) {
+    .header h1 { font-size: 1.4rem; }
+    .live-dot { display: none; }
+    .tracker-table td, .tracker-table th { padding: 8px 6px; }
+    .tracker-table { font-size: 0.76rem; }
+    .manual-grid .hide-mobile { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span class="live-dot"></span>Live Bet Tracker</h1>
+  <div class="sub">2026 Masters &middot; Augusta National &middot; April 9&ndash;12</div>
+  <div class="meta">15 bets &middot; 18.5 units deployed &middot; DraftKings primary</div>
+</div>
+
+<nav class="site-nav">
+  <a href="index.html">&#8592; Betting Card</a>
+  <span class="divider">|</span>
+  <span class="current">Live Tracker</span>
+</nav>
+
+<div class="container">
+
+  <!-- Status Bar -->
+  <div class="status-bar">
+    <span class="last-updated" id="lastUpdated">Initializing...</span>
+    <span class="badge badge-round" id="roundBadge" style="display:none"></span>
+    <span class="badge" id="modeBadge">Loading</span>
+    <span class="spacer"></span>
+    <button class="refresh-btn" id="refreshBtn" onclick="manualRefresh()">
+      <span class="spin-icon">&#8635;</span> Refresh
+    </button>
+  </div>
+
+  <!-- Card Summary -->
+  <div class="summary-grid">
+    <div class="stat-card s-total">
+      <div class="slabel">Total Deployed</div>
+      <div class="sval" id="statTotal">18.5u</div>
+      <div class="ssub">15 active bets</div>
+    </div>
+    <div class="stat-card s-cashing">
+      <div class="slabel">Cashing</div>
+      <div class="sval" id="statCashing">—</div>
+      <div class="ssub" id="statCashingSub">0 bets</div>
+    </div>
+    <div class="stat-card s-alive">
+      <div class="slabel">Alive</div>
+      <div class="sval" id="statAlive">—</div>
+      <div class="ssub" id="statAliveSub">0 bets in play</div>
+    </div>
+    <div class="stat-card s-dead">
+      <div class="slabel">Dead</div>
+      <div class="sval" id="statDead">—</div>
+      <div class="ssub" id="statDeadSub">0 bets</div>
+    </div>
+  </div>
+
+  <!-- Player Tracker -->
+  <div class="section-header">
+    <span>Player Tracker</span>
+    <span class="section-sub" id="playerCount"></span>
+  </div>
+  <div id="playerWrap">
+    <div class="no-data" id="playerEmpty">Loading live leaderboard...</div>
+    <table class="tracker-table" id="playerTable" style="display:none">
+      <thead>
+        <tr>
+          <th>Pos</th>
+          <th>Player</th>
+          <th>Total</th>
+          <th class="hide-mobile">Today</th>
+          <th class="hide-mobile">Thru</th>
+          <th>My Bets</th>
+        </tr>
+      </thead>
+      <tbody id="playerTbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Bet Breakdown -->
+  <div class="section-header">
+    <span>Bet Breakdown</span>
+    <span class="section-sub" id="payoutLabel"></span>
+  </div>
+  <div id="betBreakdown">
+    <div class="no-data">Waiting for data...</div>
+  </div>
+
+  <!-- Manual Override -->
+  <div class="section-header" style="margin-top:36px;">
+    <span>Manual Override</span>
+    <button class="manual-toggle-btn" id="manualToggleBtn" onclick="toggleManual()">&#9660; Enter Scores</button>
+  </div>
+  <div class="manual-form" id="manualForm">
+    <div class="callout">
+      API unavailable or scores delayed? Enter player data here. Select the current round, fill in positions and scores, then hit Apply. This overrides live data until you click "Reset to API".
+    </div>
+
+    <div class="round-selector">
+      <span class="rlabel">Round:</span>
+      <button class="round-btn active" id="rbtn-pre"      onclick="setRound('pre')">Pre</button>
+      <button class="round-btn"        id="rbtn-r1"       onclick="setRound('r1')">R1</button>
+      <button class="round-btn"        id="rbtn-r2"       onclick="setRound('r2')">R2</button>
+      <button class="round-btn"        id="rbtn-r3"       onclick="setRound('r3')">R3</button>
+      <button class="round-btn"        id="rbtn-r4"       onclick="setRound('r4')">R4</button>
+      <button class="round-btn"        id="rbtn-complete" onclick="setRound('complete')">Final</button>
+    </div>
+
+    <table class="manual-grid">
+      <thead>
+        <tr>
+          <th>Player</th>
+          <th>Pos</th>
+          <th>Score</th>
+          <th class="hide-mobile">Today</th>
+          <th class="hide-mobile">Thru</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="manualTbody"></tbody>
+    </table>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn-apply" onclick="applyManual()">&#10003; Apply</button>
+      <button class="btn-clear" onclick="resetToAPI()">&#8635; Reset to API</button>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// ============================================================
+// BET DEFINITIONS — edit this block to update your card
+// ============================================================
+const MY_BETS = [
+  { player: "Tommy Fleetwood",   market: "outright", odds: 2350, units: 2.0, confidence: "high"   },
+  { player: "Tommy Fleetwood",   market: "top5",     odds: 370,  units: 1.5, confidence: "high"   },
+  { player: "Si Woo Kim",        market: "outright", odds: 4900, units: 1.0, confidence: "medium" },
+  { player: "Si Woo Kim",        market: "top10",    odds: 290,  units: 2.0, confidence: "high"   },
+  { player: "Patrick Reed",      market: "outright", odds: 4300, units: 0.5, confidence: "spec"   },
+  { player: "Patrick Reed",      market: "top20",    odds: 126,  units: 2.0, confidence: "high"   },
+  { player: "Xander Schauffele", market: "top5",     odds: 305,  units: 2.0, confidence: "high"   },
+  { player: "Justin Rose",       market: "top5",     odds: 580,  units: 1.5, confidence: "medium" },
+  { player: "Collin Morikawa",   market: "top10",    odds: 215,  units: 1.0, confidence: "medium" },
+  { player: "Min Woo Lee",       market: "top10",    odds: 245,  units: 1.0, confidence: "medium" },
+  { player: "Adam Scott",        market: "top10",    odds: 365,  units: 1.0, confidence: "medium" },
+  { player: "Corey Conners",     market: "top20",    odds: 172,  units: 1.5, confidence: "medium" },
+  { player: "Akshay Bhatia",     market: "top20",    odds: 146,  units: 1.0, confidence: "medium" },
+  { player: "Jake Knapp",        market: "top20",    odds: 172,  units: 1.0, confidence: "spec"   },
+  { player: "Davis Riley",       market: "makecut",  odds: 112,  units: 0.5, confidence: "spec"   },
+];
+
+const TOTAL_UNITS   = MY_BETS.reduce((s, b) => s + b.units, 0); // 18.5
+const ALL_PLAYERS   = [...new Set(MY_BETS.map(b => b.player))];
+
+// ============================================================
+// STATE
+// ============================================================
+let leaderboard   = {};   // { "Tommy Fleetwood": { pos, numPos, score, today, thru, missedCut, withdrawn, shotsBack } }
+let tRound        = 'pre';// 'pre' | 'r1' | 'r2' | 'r3' | 'r4' | 'complete'
+let tComplete     = false;
+let dataMode      = 'pending'; // 'api' | 'manual' | 'error' | 'pending'
+let lastUpdated   = null;
+let refreshTimer  = null;
+let manualRound   = 'pre';
+let fetching      = false;
+
+// ============================================================
+// UTILITIES
+// ============================================================
+function profit(odds, units) {
+  const o = parseFloat(odds), u = parseFloat(units);
+  return parseFloat(odds > 0 ? (o / 100 * u).toFixed(2) : (100 / Math.abs(o) * u).toFixed(2));
+}
+
+function fmtOdds(o)  { return o > 0 ? `+${o}` : `${o}`; }
+function fmtScore(s) {
+  if (s === null || s === undefined) return '—';
+  if (s === 0) return 'E';
+  return s > 0 ? `+${s}` : `${s}`;
+}
+function scoreClass(s) {
+  if (s === null || s === undefined || s === 0) return 'score-even';
+  return s < 0 ? 'score-under' : 'score-over';
+}
+
+const MARKET_LABELS = { outright:'Outright', top5:'Top 5', top10:'Top 10', top20:'Top 20', makecut:'Make Cut' };
+const ROUND_LABELS  = { pre:'Pre-Tournament', r1:'Round 1', r2:'Round 2', r3:'Round 3', r4:'Round 4', complete:'Final' };
+const ROUND_NUM     = { pre:0, r1:1, r2:2, r3:3, r4:4, complete:4 };
+
+function safeId(name) { return name.toLowerCase().replace(/[^a-z0-9]/g, '-'); }
+
+// Fuzzy match ESPN player name to our tracked players
+function matchPlayer(espnName) {
+  const n = espnName.toLowerCase().trim();
+  for (const p of ALL_PLAYERS) {
+    if (p.toLowerCase() === n) return p;
+  }
+  // Last-name + first-initial fallback
+  for (const p of ALL_PLAYERS) {
+    const parts = p.toLowerCase().split(' ');
+    const last  = parts[parts.length - 1];
+    const first = parts[0][0];
+    if (n.includes(last) && n.startsWith(first)) return p;
+  }
+  return null;
+}
+
+function parseNumPos(pos) {
+  if (!pos || ['MC','WD','CUT','DQ'].includes(pos.toUpperCase())) return 999;
+  const n = parseInt(pos.replace(/[^0-9]/g, ''));
+  return isNaN(n) ? 999 : n;
+}
+
+// ============================================================
+// BET STATUS LOGIC
+// ============================================================
+function getStatus(bet, data) {
+  if (!data || tRound === 'pre') return 'alive'; // pre-tournament: everything alive
+
+  const { numPos, missedCut, withdrawn, shotsBack } = data;
+  const rn = ROUND_NUM[tRound] || 0;
+
+  if (withdrawn) return 'dead';
+
+  switch (bet.market) {
+    case 'outright':
+      if (missedCut) return 'dead';
+      if (tComplete)  return numPos === 1 ? 'cashing' : 'dead';
+      if (numPos === 1) return 'cashing';          // currently leading
+      if (shotsBack <= 5) return 'alive';
+      if (shotsBack >= 10 && rn >= 3) return 'dead';
+      return 'alive';
+
+    case 'top5':
+      if (missedCut) return 'dead';
+      if (numPos <= 5)  return 'cashing';
+      if (numPos <= 10) return 'alive';
+      if (shotsBack >= 15 && rn >= 3) return 'dead';
+      return 'alive';
+
+    case 'top10':
+      if (missedCut) return 'dead';
+      if (numPos <= 10) return 'cashing';
+      if (numPos <= 20) return 'alive';
+      if (tComplete && numPos > 10) return 'dead';
+      return 'alive';
+
+    case 'top20':
+      if (missedCut) return 'dead';
+      if (numPos <= 20) return 'cashing';
+      if (numPos <= 30) return 'alive';
+      if (tComplete && numPos > 20) return 'dead';
+      return 'alive';
+
+    case 'makecut':
+      if (missedCut) return 'dead';
+      if (rn >= 3)   return 'cashing'; // survived the cut
+      return 'alive';
+  }
+  return 'alive';
+}
+
+// ============================================================
+// ESPN API
+// ============================================================
+const ESPN_BOARD = 'https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard';
+const ESPN_LB    = 'https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard';
+
+async function fetchLive() {
+  if (fetching || dataMode === 'manual') return;
+  fetching = true;
+  spinner(true);
+
+  try {
+    // 1. Discover event ID from scoreboard
+    let eventId = null;
+    try {
+      const sb = await fetch(ESPN_BOARD, { cache: 'no-store' });
+      const sbj = await sb.json();
+      const events = sbj.events || [];
+      const masters = events.find(e =>
+        (e.name || '').toLowerCase().includes('master') ||
+        (e.shortName || '').toLowerCase().includes('master')
+      );
+      if (masters) eventId = masters.id;
+    } catch { /* scoreboard optional */ }
+
+    // 2. Fetch leaderboard (with or without event ID)
+    const url = eventId ? `${ESPN_LB}?event=${eventId}` : ESPN_LB;
+    const lb = await fetch(url, { cache: 'no-store' });
+    const lbj = await lb.json();
+
+    parseESPN(lbj);
+    dataMode    = 'api';
+    lastUpdated = new Date();
+    renderAll();
+
+  } catch (err) {
+    console.warn('ESPN fetch failed:', err);
+    if (Object.keys(leaderboard).length === 0) {
+      // No data at all — show helpful message
+      document.getElementById('playerEmpty').textContent =
+        'ESPN API unavailable. Use Manual Override below to enter scores.';
+    }
+    dataMode = 'error';
+    renderStatusBar();
+  } finally {
+    fetching = false;
+    spinner(false);
+    updateTimestamp();
+  }
+}
+
+function parseESPN(data) {
+  let players = [];
+  let state   = null;
+
+  // Shape A: data.leaderboard = [ {displayName, score, ...} ]
+  if (Array.isArray(data.leaderboard) && data.leaderboard.length) {
+    players = data.leaderboard;
+    state   = data.status?.type?.state;
+  }
+  // Shape B: scoreboard-style data.events[0].competitions[0].competitors
+  else if (data.events?.[0]?.competitions?.[0]?.competitors?.length) {
+    players = data.events[0].competitions[0].competitors;
+    state   = data.events[0].competitions[0].status?.type?.state;
+  }
+
+  if (!players.length) { console.warn('ESPN: no players parsed', data); return; }
+
+  // Round / completion state
+  if (state === 'pre')  { tRound = 'pre'; tComplete = false; }
+  else if (state === 'post') { tComplete = true; }
+
+  // Leader score for shots-back calc
+  let leaderScore = Infinity;
+  players.forEach(p => {
+    const s = readScore(p);
+    if (s !== null && s < leaderScore) leaderScore = s;
+  });
+
+  const updated = {};
+  players.forEach(p => {
+    const name = p.displayName || p.athlete?.displayName || p.name || '';
+    const key  = matchPlayer(name);
+    if (!key) return;
+
+    const score     = readScore(p);
+    const rawStatus = (p.status?.type?.description || p.status || '').toLowerCase();
+    const rawPos    = p.displayPosition || String(p.position?.id || p.position || p.sortOrder || '');
+    const missedCut = rawStatus.includes('cut') || rawPos.toUpperCase() === 'MC';
+    const withdrawn = rawStatus.includes('wd') || rawStatus.includes('withdraw');
+    const today     = readToday(p);
+    const thru      = readThru(p);
+    const numPos    = missedCut || withdrawn ? 999 : parseNumPos(rawPos);
+    const shotsBack = score !== null && leaderScore !== Infinity ? Math.max(0, score - leaderScore) : 0;
+
+    updated[key] = { pos: missedCut ? 'MC' : withdrawn ? 'WD' : rawPos || '—', numPos, score, today, thru, missedCut, withdrawn, shotsBack };
+
+    // If we see players with scores, round is at least r1
+    if (tRound === 'pre' && score !== null) tRound = 'r1';
+  });
+
+  leaderboard = { ...leaderboard, ...updated };
+}
+
+function readScore(p) {
+  if (p.score !== undefined && p.score !== null) {
+    const n = parseFloat(p.score);
+    if (!isNaN(n)) return n;
+    // String like "E", "-8", "+2"
+    const s = String(p.score).trim().replace('+', '').replace('E', '0');
+    const m = parseFloat(s);
+    return isNaN(m) ? null : m;
+  }
+  if (p.displayScore) {
+    const s = p.displayScore.replace('+', '').replace('E', '0');
+    const n = parseFloat(s);
+    return isNaN(n) ? null : n;
+  }
+  return null;
+}
+
+function readToday(p) {
+  if (p.today !== undefined && p.today !== null) {
+    const n = parseFloat(p.today);
+    return isNaN(n) ? null : n;
+  }
+  if (p.displayToday) {
+    const s = p.displayToday.replace('+', '').replace('E', '0');
+    return parseFloat(s) || null;
+  }
+  // Last linescore
+  if (Array.isArray(p.linescores) && p.linescores.length) {
+    const last = p.linescores[p.linescores.length - 1];
+    const n = parseFloat(last?.value ?? last?.displayValue ?? '');
+    return isNaN(n) ? null : n;
+  }
+  return null;
+}
+
+function readThru(p) {
+  if (p.thru !== undefined && p.thru !== null) return String(p.thru);
+  if (p.displayThru) return p.displayThru;
+  // Check statistics array
+  if (Array.isArray(p.statistics)) {
+    const t = p.statistics.find(s => s.name === 'thru' || s.abbreviation === 'THRU');
+    if (t) return String(t.displayValue ?? t.value ?? '');
+  }
+  return null;
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function renderAll() {
+  renderStatusBar();
+  renderSummary();
+  renderPlayerTable();
+  renderBets();
+}
+
+function renderStatusBar() {
+  const rb = document.getElementById('roundBadge');
+  rb.textContent = ROUND_LABELS[tRound] || tRound;
+  rb.style.display = 'inline-block';
+
+  const mb = document.getElementById('modeBadge');
+  const modeMap = {
+    api:     ['API · Live', 'badge-api'],
+    manual:  ['Manual',     'badge-manual'],
+    error:   ['API Error',  'badge-error'],
+    pending: ['Loading',    'badge-pending'],
+  };
+  const [label, cls] = modeMap[dataMode] || ['Unknown', 'badge-error'];
+  mb.textContent = label;
+  mb.className   = `badge ${cls}`;
+}
+
+function renderSummary() {
+  const withStatus = MY_BETS.map(b => ({ ...b, st: getStatus(b, leaderboard[b.player]) }));
+
+  const cash  = withStatus.filter(b => b.st === 'cashing');
+  const alive = withStatus.filter(b => b.st === 'alive');
+  const dead  = withStatus.filter(b => b.st === 'dead');
+
+  const cashU  = cash.reduce((s, b) => s + b.units, 0);
+  const aliveU = alive.reduce((s, b) => s + b.units, 0);
+  const deadU  = dead.reduce((s, b) => s + b.units, 0);
+  const cashP  = cash.reduce((s, b) => s + profit(b.odds, b.units), 0);
+  const aliveP = alive.reduce((s, b) => s + profit(b.odds, b.units), 0);
+
+  document.getElementById('statCashing').textContent  = cash.length  ? `${cashU.toFixed(1)}u`  : '0u';
+  document.getElementById('statCashingSub').textContent = cash.length
+    ? `+${cashP.toFixed(1)}u profit`
+    : '0 bets cashing';
+
+  document.getElementById('statAlive').textContent    = alive.length ? `${aliveU.toFixed(1)}u` : '0u';
+  document.getElementById('statAliveSub').textContent = `${alive.length} bet${alive.length !== 1 ? 's' : ''} in play`;
+
+  document.getElementById('statDead').textContent     = dead.length  ? `-${deadU.toFixed(1)}u` : '0u';
+  document.getElementById('statDeadSub').textContent  = `${dead.length} bet${dead.length !== 1 ? 's' : ''} lost`;
+
+  // Payout label in section header
+  const pl = document.getElementById('payoutLabel');
+  pl.style.color = cash.length ? 'var(--positive)' : 'var(--text-dim)';
+  pl.textContent = cash.length
+    ? `${cash.length} cashing → +${cashP.toFixed(1)}u profit if hold`
+    : 'No bets currently cashing';
+}
+
+function renderPlayerTable() {
+  const empty = document.getElementById('playerEmpty');
+  const table = document.getElementById('playerTable');
+  const tbody = document.getElementById('playerTbody');
+  const count = document.getElementById('playerCount');
+
+  const hasData = Object.keys(leaderboard).length > 0;
+
+  if (!hasData) {
+    empty.style.display = 'block';
+    table.style.display = 'none';
+    count.textContent   = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  table.style.display = 'table';
+  count.textContent   = `${ALL_PLAYERS.length} players tracked`;
+
+  // Sort by position (missed cut last)
+  const sorted = [...ALL_PLAYERS].sort((a, b) => {
+    const pa = leaderboard[a]?.numPos ?? 500;
+    const pb = leaderboard[b]?.numPos ?? 500;
+    return pa - pb;
+  });
+
+  tbody.innerHTML = '';
+  sorted.forEach(player => {
+    const d    = leaderboard[player];
+    const bets = MY_BETS.filter(b => b.player === player);
+
+    const tr = document.createElement('tr');
+    if (d?.missedCut || d?.withdrawn) tr.className = 'row-mc';
+
+    const chips = bets.map(b => {
+      const st = getStatus(b, d);
+      return `<span class="chip chip-${st}">${MARKET_LABELS[b.market]}</span>`;
+    }).join('');
+
+    tr.innerHTML = `
+      <td class="col-pos">${d?.pos || '—'}</td>
+      <td class="col-name">${player}</td>
+      <td class="col-score ${scoreClass(d?.score)}">${fmtScore(d?.score)}</td>
+      <td class="col-today ${scoreClass(d?.today)} hide-mobile">${d?.today !== null && d?.today !== undefined ? fmtScore(d.today) : '—'}</td>
+      <td class="col-thru hide-mobile">${d?.thru || '—'}</td>
+      <td><div class="bet-chips">${chips}</div></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderBets() {
+  const container = document.getElementById('betBreakdown');
+  container.innerHTML = '';
+
+  const withStatus = MY_BETS.map(b => ({ ...b, st: getStatus(b, leaderboard[b.player]) }));
+
+  const groups = [
+    { key: 'cashing', label: 'Cashing' },
+    { key: 'alive',   label: 'Alive'   },
+    { key: 'dead',    label: 'Dead'    },
+  ];
+
+  let anyRendered = false;
+
+  groups.forEach(g => {
+    const bets = withStatus.filter(b => b.st === g.key);
+    if (!bets.length) return;
+    anyRendered = true;
+
+    const groupU = bets.reduce((s, b) => s + b.units, 0);
+    const groupP = bets.reduce((s, b) => s + profit(b.odds, b.units), 0);
+
+    let sub = '';
+    if (g.key === 'cashing') sub = ` &nbsp;·&nbsp; ${groupU.toFixed(1)}u &nbsp;·&nbsp; +${groupP.toFixed(1)}u if holds`;
+    if (g.key === 'alive')   sub = ` &nbsp;·&nbsp; ${groupU.toFixed(1)}u at risk &nbsp;·&nbsp; +${groupP.toFixed(1)}u potential`;
+    if (g.key === 'dead')    sub = ` &nbsp;·&nbsp; -${groupU.toFixed(1)}u`;
+
+    const groupEl = document.createElement('div');
+    groupEl.className = 'bet-group';
+    groupEl.innerHTML = `
+      <div class="group-header ${g.key}">
+        <span class="sdot sdot-${g.key}"></span>
+        ${g.label.toUpperCase()} (${bets.length})${sub}
+      </div>
+    `;
+
+    bets.forEach(b => {
+      const p = profit(b.odds, b.units);
+      const d = leaderboard[b.player];
+      const posStr = d?.pos || '—';
+      const scoreStr = d?.score !== null && d?.score !== undefined ? fmtScore(d.score) : '';
+
+      let profitHtml;
+      if (b.st === 'cashing') profitHtml = `<div class="bprofit bprofit-pos">+${p.toFixed(2)}u</div>`;
+      else if (b.st === 'dead') profitHtml = `<div class="bprofit bprofit-neg">-${b.units}u</div>`;
+      else profitHtml = `<div class="bprofit bprofit-dim">+${p.toFixed(2)}u</div>`;
+
+      const row = document.createElement('div');
+      row.className = 'bet-row';
+      row.innerHTML = `
+        <div>
+          <div class="bplayer">${b.player}</div>
+          <div class="bmarket">${MARKET_LABELS[b.market]}${posStr !== '—' ? ' &nbsp;·&nbsp; ' + posStr : ''}${scoreStr ? ' &nbsp;·&nbsp; ' + scoreStr : ''}</div>
+        </div>
+        <div class="bodds">${fmtOdds(b.odds)}</div>
+        <div class="bunits">${b.units}u</div>
+        ${profitHtml}
+      `;
+      groupEl.appendChild(row);
+    });
+
+    container.appendChild(groupEl);
+  });
+
+  if (!anyRendered) {
+    container.innerHTML = '<div class="no-data">No data yet — refresh or use manual override.</div>';
+  }
+}
+
+// ============================================================
+// AUTO REFRESH
+// ============================================================
+function isTournamentHours() {
+  const d = new Date();
+  const day  = d.getDay();  // 0=Sun, 4=Thu, 5=Fri, 6=Sat
+  const hour = d.getHours();
+  return [0, 4, 5, 6].includes(day) && hour >= 8 && hour < 19;
+}
+
+function startAutoRefresh() {
+  clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => {
+    if (dataMode !== 'manual' && isTournamentHours()) fetchLive();
+  }, 60000);
+}
+
+function manualRefresh() {
+  if (dataMode === 'manual') return;
+  fetchLive();
+}
+
+function spinner(on) {
+  document.getElementById('refreshBtn').classList.toggle('spinning', on);
+}
+
+function updateTimestamp() {
+  const el = document.getElementById('lastUpdated');
+  if (!lastUpdated) { el.textContent = 'No data loaded'; return; }
+  const t = lastUpdated.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  el.textContent = `Updated ${t}`;
+}
+
+// ============================================================
+// MANUAL OVERRIDE
+// ============================================================
+function buildManualRows() {
+  const tbody = document.getElementById('manualTbody');
+  tbody.innerHTML = '';
+  ALL_PLAYERS.forEach(player => {
+    const d  = leaderboard[player] || {};
+    const id = safeId(player);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="mplayer">${player}</td>
+      <td><input class="minput" id="m-pos-${id}" placeholder="T3" value="${d.pos && d.pos !== '—' ? d.pos : ''}" style="width:66px"></td>
+      <td><input class="minput" id="m-sc-${id}"  placeholder="-6" value="${d.score !== null && d.score !== undefined ? fmtScore(d.score) : ''}" style="width:58px"></td>
+      <td class="hide-mobile"><input class="minput" id="m-td-${id}" placeholder="-2" value="${d.today !== null && d.today !== undefined ? fmtScore(d.today) : ''}" style="width:58px"></td>
+      <td class="hide-mobile"><input class="minput" id="m-th-${id}" placeholder="F"  value="${d.thru || ''}" style="width:46px"></td>
+      <td>
+        <select class="minput" id="m-st-${id}" style="width:100px">
+          <option value="active" ${!d.missedCut && !d.withdrawn ? 'selected' : ''}>Active</option>
+          <option value="mc"     ${d.missedCut  ? 'selected' : ''}>Missed Cut</option>
+          <option value="wd"     ${d.withdrawn  ? 'selected' : ''}>Withdrawn</option>
+        </select>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function toggleManual() {
+  const form = document.getElementById('manualForm');
+  const btn  = document.getElementById('manualToggleBtn');
+  const open = form.classList.toggle('open');
+  btn.innerHTML = open ? '&#9650; Enter Scores' : '&#9660; Enter Scores';
+  if (open) buildManualRows();
+}
+
+function setRound(r) {
+  manualRound = r;
+  document.querySelectorAll('.round-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`rbtn-${r}`).classList.add('active');
+}
+
+function parseManualVal(v) {
+  if (!v || !v.trim()) return null;
+  const s = v.trim().toUpperCase();
+  if (s === 'E') return 0;
+  const n = parseFloat(s.replace('+', ''));
+  return isNaN(n) ? null : n;
+}
+
+function applyManual() {
+  tRound    = manualRound;
+  tComplete = manualRound === 'complete';
+  dataMode  = 'manual';
+
+  // Compute leader score for shots-back
+  const scores = ALL_PLAYERS.map(p => {
+    const id = safeId(p);
+    return parseManualVal(document.getElementById(`m-sc-${id}`)?.value);
+  }).filter(s => s !== null);
+  const leaderScore = scores.length ? Math.min(...scores) : 0;
+
+  const updated = {};
+  ALL_PLAYERS.forEach(player => {
+    const id  = safeId(player);
+    const pos = (document.getElementById(`m-pos-${id}`)?.value || '').trim() || '—';
+    const sc  = parseManualVal(document.getElementById(`m-sc-${id}`)?.value);
+    const td  = parseManualVal(document.getElementById(`m-td-${id}`)?.value);
+    const th  = document.getElementById(`m-th-${id}`)?.value?.trim() || null;
+    const st  = document.getElementById(`m-st-${id}`)?.value || 'active';
+    const mc  = st === 'mc';
+    const wd  = st === 'wd';
+    const num = mc || wd ? 999 : parseNumPos(pos);
+    const sb  = sc !== null ? Math.max(0, sc - leaderScore) : 0;
+    updated[player] = { pos, numPos: num, score: sc, today: td, thru: th, missedCut: mc, withdrawn: wd, shotsBack: sb };
+  });
+
+  leaderboard = updated;
+  lastUpdated = new Date();
+  renderAll();
+  updateTimestamp();
+}
+
+function resetToAPI() {
+  dataMode  = 'pending';
+  leaderboard = {};
+  renderAll();
+  fetchLive();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+(function init() {
+  buildManualRows();
+  startAutoRefresh();
+  fetchLive();
+  setInterval(updateTimestamp, 30000);
+})();
+</script>
+</body>
+</html>
