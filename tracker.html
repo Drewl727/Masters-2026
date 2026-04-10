@@ -365,6 +365,19 @@
   .bprofit-neg { color: var(--red-soft); }
   .bprofit-dim { color: var(--text-dim); }
 
+  .prob-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    background: rgba(212,175,55,0.08);
+    border: 1px solid rgba(212,175,55,0.2);
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin-right: 2px;
+  }
+  .prob-tag.prob-hi { color: var(--gold); border-color: rgba(212,175,55,0.4); }
+  .prob-tag.prob-lo { color: var(--red-soft); opacity: 0.8; border-color: rgba(192,57,43,0.3); }
+
   /* ── NO DATA ── */
   .no-data {
     text-align: center;
@@ -735,49 +748,68 @@ function parseNumPos(pos) {
 // ============================================================
 // BET STATUS LOGIC
 // ============================================================
-function getStatus(bet, data) {
-  if (!data || tRound === 'pre') return 'alive'; // pre-tournament: everything alive
-
+// Probability a bet cashes based on current position and rounds remaining.
+// Used both to decide DEAD threshold and to display on ALIVE bets.
+function calcProb(bet, data) {
+  if (!data) return 50;
   const { numPos, missedCut, withdrawn, shotsBack } = data;
   const rn = ROUND_NUM[tRound] || 0;
+  const roundsLeft = Math.max(0, 4 - rn);
 
-  if (withdrawn) return 'dead';
+  if (missedCut || withdrawn) return 0;
+  if (tRound === 'pre') return 50;
+  if (tComplete) {
+    const t = { outright:1, top5:5, top10:10, top20:20, makecut:0 };
+    return numPos <= (t[bet.market] || 0) ? 100 : 0;
+  }
 
   switch (bet.market) {
-    case 'outright':
-      if (missedCut) return 'dead';
-      if (tComplete)  return numPos === 1 ? 'cashing' : 'dead';
-      if (numPos === 1) return 'cashing';          // currently leading
-      if (shotsBack <= 5) return 'alive';
-      if (shotsBack >= 10 && rn >= 3) return 'dead';
-      return 'alive';
-
+    case 'outright': {
+      if (numPos === 1) return 95;
+      // Shots-back model: the further back, the worse the odds
+      const maxShots = { r1:12, r2:8, r3:5, r4:2 };
+      const max = maxShots[tRound] || 12;
+      return Math.max(0, Math.round((1 - shotsBack / max) * 90));
+    }
     case 'top5':
-      if (missedCut) return 'dead';
-      if (numPos <= 5)  return 'cashing';
-      if (numPos <= 10) return 'alive';
-      if (shotsBack >= 15 && rn >= 3) return 'dead';
-      return 'alive';
-
     case 'top10':
-      if (missedCut) return 'dead';
-      if (numPos <= 10) return 'cashing';
-      if (numPos <= 20) return 'alive';
-      if (tComplete && numPos > 10) return 'dead';
-      return 'alive';
-
-    case 'top20':
-      if (missedCut) return 'dead';
-      if (numPos <= 20) return 'cashing';
-      if (numPos <= 30) return 'alive';
-      if (tComplete && numPos > 20) return 'dead';
-      return 'alive';
-
+    case 'top20': {
+      const t = { top5:5, top10:10, top20:20 };
+      const target = t[bet.market];
+      if (numPos <= target) return 95;
+      // posRatio × rounds-remaining factor
+      const prob = (target / numPos) * (roundsLeft / 3) * 100;
+      return Math.max(0, Math.min(90, Math.round(prob)));
+    }
     case 'makecut':
-      if (missedCut) return 'dead';
-      if (rn >= 3)   return 'cashing'; // survived the cut
-      return 'alive';
+      if (rn >= 3) return missedCut ? 0 : 99;
+      return 72; // pre-cut: decent base chance
   }
+  return 50;
+}
+
+function getStatus(bet, data) {
+  if (!data || tRound === 'pre') return 'alive';
+
+  const { numPos, missedCut, withdrawn } = data;
+  const rn = ROUND_NUM[tRound] || 0;
+
+  // Hard dead: missed cut, withdrawn, or tournament over and not in position
+  if (withdrawn || missedCut) return 'dead';
+  if (tComplete) {
+    const t = { outright:1, top5:5, top10:10, top20:20, makecut:0 };
+    return numPos <= (t[bet.market] || 0) ? 'cashing' : 'dead';
+  }
+
+  // Currently cashing
+  const targets = { outright:1, top5:5, top10:10, top20:20 };
+  if (bet.market === 'makecut' && rn >= 3) return 'cashing';
+  if (numPos <= (targets[bet.market] || 999)) return 'cashing';
+
+  // Probability-based dead: only apply from R2 onwards so R1 stays open
+  const prob = calcProb(bet, data);
+  if (prob < 8 && rn >= 2) return 'dead';
+
   return 'alive';
 }
 
@@ -1091,8 +1123,10 @@ function renderPlayerTable() {
     if (d?.missedCut || d?.withdrawn) tr.className = 'row-mc';
 
     const chips = bets.map(b => {
-      const st = getStatus(b, d);
-      return `<span class="chip chip-${st}">${MARKET_LABELS[b.market]}</span>`;
+      const st   = getStatus(b, d);
+      const prob = st === 'alive' ? calcProb(b, d) : null;
+      const label = MARKET_LABELS[b.market] + (prob !== null ? ` · ${prob}%` : '');
+      return `<span class="chip chip-${st}">${label}</span>`;
     }).join('');
 
     tr.innerHTML = `
@@ -1146,13 +1180,17 @@ function renderBets() {
     bets.forEach(b => {
       const p = profit(b.odds, b.units);
       const d = leaderboard[b.player];
-      const posStr = d?.pos || '—';
+      const posStr   = d?.pos || '—';
       const scoreStr = d?.score !== null && d?.score !== undefined ? fmtScore(d.score) : '';
+      const prob     = b.st === 'alive' ? calcProb(b, d) : null;
+      const probHtml = prob !== null
+        ? `<span class="prob-tag ${prob >= 40 ? 'prob-hi' : prob < 20 ? 'prob-lo' : ''}">~${prob}%</span> `
+        : '';
 
       let profitHtml;
       if (b.st === 'cashing') profitHtml = `<div class="bprofit bprofit-pos">+${p.toFixed(2)}u</div>`;
       else if (b.st === 'dead') profitHtml = `<div class="bprofit bprofit-neg">-${b.units}u</div>`;
-      else profitHtml = `<div class="bprofit bprofit-dim">+${p.toFixed(2)}u</div>`;
+      else profitHtml = `<div class="bprofit bprofit-dim">${probHtml}+${p.toFixed(2)}u</div>`;
 
       const row = document.createElement('div');
       row.className = 'bet-row';
