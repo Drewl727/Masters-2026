@@ -636,23 +636,27 @@ async function fetchLive() {
 function parseESPN(data) {
   let players = [];
   let state   = null;
+  let period  = null;
 
   if (Array.isArray(data.leaderboard) && data.leaderboard.length) {
     players = data.leaderboard;
     state   = data.status?.type?.state;
   } else if (data.events?.[0]?.competitions?.[0]?.competitors?.length) {
-    players = data.events[0].competitions[0].competitors;
-    state   = data.events[0].competitions[0].status?.type?.state;
+    const comp = data.events[0].competitions[0];
+    players = comp.competitors;
+    state   = comp.status?.type?.state;
+    period  = comp.status?.period;
   }
 
   if (!players.length) return;
 
-  if (state === 'pre')  { tRound = 'pre'; tComplete = false; }
-  else if (state === 'post') { tComplete = true; }
+  if (state === 'pre')       { tRound = 'pre'; tComplete = false; }
+  else if (state === 'post') { tRound = 'complete'; tComplete = true; }
+  else if (period >= 1 && period <= 4) { tRound = `r${period}`; }
 
   let leaderScore = Infinity;
   players.forEach(p => {
-    const s = readScore(p);
+    const s = readToPar(p);
     if (s !== null && s < leaderScore) leaderScore = s;
   });
 
@@ -662,46 +666,80 @@ function parseESPN(data) {
     const key  = matchPlayer(name);
     if (!key) return;
 
-    const score     = readScore(p);
-    const rawStatus = (p.status?.type?.description || p.status || '').toLowerCase();
-    const rawPos    = p.displayPosition || String(p.position?.id || p.position || p.sortOrder || '');
-    const missedCut = rawStatus.includes('cut') || rawPos.toUpperCase() === 'MC';
+    const score     = readToPar(p);
+    const rawPos    = readDisplayPos(p);
+    const rawStatus = (p.status?.type?.description || p.status?.displayValue || '').toLowerCase();
+    const missedCut = rawStatus.includes('cut') || (rawPos || '').toUpperCase() === 'MC';
     const withdrawn = rawStatus.includes('wd') || rawStatus.includes('withdraw');
-    const today     = readToday(p);
+    const today     = readRoundScore(p);
     const thru      = readThru(p);
     const numPos    = missedCut || withdrawn ? 999 : parseNumPos(rawPos);
     const shotsBack = score !== null && leaderScore !== Infinity ? Math.max(0, score - leaderScore) : 0;
 
-    updated[key] = { pos: missedCut ? 'MC' : withdrawn ? 'WD' : rawPos || '—', numPos, score, today, thru, missedCut, withdrawn, shotsBack };
+    updated[key] = { pos: missedCut ? 'MC' : withdrawn ? 'WD' : (rawPos || '—'), numPos, score, today, thru, missedCut, withdrawn, shotsBack };
     if (tRound === 'pre' && score !== null) tRound = 'r1';
   });
 
   leaderboard = { ...leaderboard, ...updated };
 }
 
-function readScore(p) {
-  if (p.score !== undefined && p.score !== null) {
-    const n = parseFloat(p.score);
-    if (!isNaN(n)) return n;
-    const s = String(p.score).trim().replace('+','').replace('E','0');
-    const m = parseFloat(s);
-    return isNaN(m) ? null : m;
-  }
+// displayScore is ESPN's to-par string ("-6", "E"); score is raw strokes (204) — check displayScore first.
+function readToPar(p) {
   if (p.displayScore) {
-    const s = p.displayScore.replace('+','').replace('E','0');
-    return parseFloat(s) || null;
+    const s = p.displayScore.trim();
+    if (s === 'E') return 0;
+    const n = parseFloat(s.replace('+',''));
+    if (!isNaN(n) && Math.abs(n) <= 40) return n;
+  }
+  if (Array.isArray(p.statistics)) {
+    for (const stat of p.statistics) {
+      const sn = (stat.name||'').toLowerCase().replace(/[_\s]/g,'');
+      if (sn === 'scoretopar' || sn === 'topar') {
+        if (stat.value !== undefined) { const n=parseFloat(stat.value); if (!isNaN(n)) return n; }
+        if (stat.displayValue) { const n=parseFloat(stat.displayValue.replace('E','0').replace('+','')); if (!isNaN(n)) return n; }
+      }
+    }
+  }
+  if (p.score !== undefined && p.score !== null) {
+    const s = String(p.score).trim();
+    if (s === 'E') return 0;
+    if (s.startsWith('+') || s.startsWith('-')) { const n=parseFloat(s); if (!isNaN(n)) return n; }
+    const n = parseFloat(s);
+    if (!isNaN(n) && Math.abs(n) <= 25) return n;
   }
   return null;
 }
 
-function readToday(p) {
-  if (p.today !== undefined && p.today !== null) return parseFloat(p.today) || null;
-  if (p.displayToday) { const s=p.displayToday.replace('+','').replace('E','0'); return parseFloat(s)||null; }
+// Today's round score to par — statistics first, then direct fields, then linescore fallback.
+function readRoundScore(p) {
+  if (Array.isArray(p.statistics)) {
+    for (const stat of p.statistics) {
+      const sn = (stat.name||'').toLowerCase().replace(/[_\s]/g,'');
+      if (['today','roundscore','round','roundtopar','currentround'].includes(sn)) {
+        if (stat.value !== undefined) { const n=parseFloat(stat.value); if (!isNaN(n)) return n; }
+        if (stat.displayValue) { const n=parseFloat(stat.displayValue.replace('E','0').replace('+','')); if (!isNaN(n)) return n; }
+      }
+    }
+  }
+  if (p.today !== undefined && p.today !== null) { const n=parseFloat(String(p.today).replace('E','0').replace('+','')); return isNaN(n)?null:n; }
+  if (p.displayToday) { const n=parseFloat(p.displayToday.replace('E','0').replace('+','')); return isNaN(n)?null:n; }
   if (Array.isArray(p.linescores) && p.linescores.length) {
     const last = p.linescores[p.linescores.length-1];
-    const n = parseFloat(last?.value ?? last?.displayValue ?? '');
-    return isNaN(n) ? null : n;
+    const raw = parseFloat(last?.value ?? last?.displayValue ?? '');
+    if (!isNaN(raw)) return raw > 50 ? raw - 72 : raw; // raw strokes → to-par (par 72)
   }
+  return null;
+}
+
+function readDisplayPos(p) {
+  if (p.displayPosition) return p.displayPosition;
+  if (Array.isArray(p.statistics)) {
+    const stat = p.statistics.find(s => (s.name||'').toLowerCase() === 'position');
+    if (stat?.displayValue) return stat.displayValue;
+  }
+  const desc = p.status?.type?.description || p.status?.displayValue || '';
+  if (/^(T?\d+|MC|WD|CUT|DQ)$/i.test(desc)) return desc;
+  if (p.position) return typeof p.position === 'object' ? p.position.displayName || String(p.position.id||'') : String(p.position);
   return null;
 }
 
@@ -709,7 +747,7 @@ function readThru(p) {
   if (p.thru !== undefined && p.thru !== null) return String(p.thru);
   if (p.displayThru) return p.displayThru;
   if (Array.isArray(p.statistics)) {
-    const t = p.statistics.find(s => s.name==='thru' || s.abbreviation==='THRU');
+    const t = p.statistics.find(s => (s.name||'').toLowerCase()==='thru' || s.abbreviation==='THRU');
     if (t) return String(t.displayValue ?? t.value ?? '');
   }
   return null;

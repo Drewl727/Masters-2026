@@ -835,6 +835,7 @@ async function fetchLive() {
 function parseESPN(data) {
   let players = [];
   let state   = null;
+  let period  = null; // round number 1-4
 
   // Shape A: data.leaderboard = [ {displayName, score, ...} ]
   if (Array.isArray(data.leaderboard) && data.leaderboard.length) {
@@ -843,20 +844,23 @@ function parseESPN(data) {
   }
   // Shape B: scoreboard-style data.events[0].competitions[0].competitors
   else if (data.events?.[0]?.competitions?.[0]?.competitors?.length) {
-    players = data.events[0].competitions[0].competitors;
-    state   = data.events[0].competitions[0].status?.type?.state;
+    const comp = data.events[0].competitions[0];
+    players = comp.competitors;
+    state   = comp.status?.type?.state;
+    period  = comp.status?.period; // 1=R1, 2=R2, etc.
   }
 
   if (!players.length) { console.warn('ESPN: no players parsed', data); return; }
 
   // Round / completion state
-  if (state === 'pre')  { tRound = 'pre'; tComplete = false; }
-  else if (state === 'post') { tComplete = true; }
+  if (state === 'pre')       { tRound = 'pre'; tComplete = false; }
+  else if (state === 'post') { tRound = 'complete'; tComplete = true; }
+  else if (period >= 1 && period <= 4) { tRound = `r${period}`; }
 
   // Leader score for shots-back calc
   let leaderScore = Infinity;
   players.forEach(p => {
-    const s = readScore(p);
+    const s = readToPar(p);
     if (s !== null && s < leaderScore) leaderScore = s;
   });
 
@@ -866,56 +870,119 @@ function parseESPN(data) {
     const key  = matchPlayer(name);
     if (!key) return;
 
-    const score     = readScore(p);
-    const rawStatus = (p.status?.type?.description || p.status || '').toLowerCase();
-    const rawPos    = p.displayPosition || String(p.position?.id || p.position || p.sortOrder || '');
-    const missedCut = rawStatus.includes('cut') || rawPos.toUpperCase() === 'MC';
+    const score     = readToPar(p);
+    const rawPos    = readDisplayPos(p);
+    const rawStatus = (p.status?.type?.description || p.status?.displayValue || '').toLowerCase();
+    const missedCut = rawStatus.includes('cut') || (rawPos || '').toUpperCase() === 'MC';
     const withdrawn = rawStatus.includes('wd') || rawStatus.includes('withdraw');
-    const today     = readToday(p);
+    const today     = readRoundScore(p);
     const thru      = readThru(p);
     const numPos    = missedCut || withdrawn ? 999 : parseNumPos(rawPos);
     const shotsBack = score !== null && leaderScore !== Infinity ? Math.max(0, score - leaderScore) : 0;
 
-    updated[key] = { pos: missedCut ? 'MC' : withdrawn ? 'WD' : rawPos || '—', numPos, score, today, thru, missedCut, withdrawn, shotsBack };
+    updated[key] = { pos: missedCut ? 'MC' : withdrawn ? 'WD' : (rawPos || '—'), numPos, score, today, thru, missedCut, withdrawn, shotsBack };
 
-    // If we see players with scores, round is at least r1
     if (tRound === 'pre' && score !== null) tRound = 'r1';
   });
 
   leaderboard = { ...leaderboard, ...updated };
 }
 
-function readScore(p) {
-  if (p.score !== undefined && p.score !== null) {
-    const n = parseFloat(p.score);
-    if (!isNaN(n)) return n;
-    // String like "E", "-8", "+2"
-    const s = String(p.score).trim().replace('+', '').replace('E', '0');
-    const m = parseFloat(s);
-    return isNaN(m) ? null : m;
-  }
+// Read total to-par score.
+// ESPN's `score` field is raw stroke total (e.g. 204); `displayScore` is to-par ("-12").
+// Check displayScore first, then statistics, then fall through to `score` only if small.
+function readToPar(p) {
+  // 1. displayScore — ESPN's formatted to-par string: "-6", "E", "+2"
   if (p.displayScore) {
-    const s = p.displayScore.replace('+', '').replace('E', '0');
+    const s = p.displayScore.trim();
+    if (s === 'E') return 0;
+    const n = parseFloat(s.replace('+', ''));
+    if (!isNaN(n) && Math.abs(n) <= 40) return n;
+  }
+  // 2. statistics array — look for scoreToPar / toPar
+  if (Array.isArray(p.statistics)) {
+    for (const stat of p.statistics) {
+      const sn = (stat.name || '').toLowerCase().replace(/[_\s]/g, '');
+      if (sn === 'scoretopar' || sn === 'topar' || sn === 'scoretpar') {
+        if (stat.value !== undefined) {
+          const n = parseFloat(stat.value);
+          if (!isNaN(n)) return n;
+        }
+        if (stat.displayValue) {
+          const n = parseFloat(stat.displayValue.replace('E','0').replace('+',''));
+          if (!isNaN(n)) return n;
+        }
+      }
+    }
+  }
+  // 3. score field — only accept if it has a sign ("+"/"-") or is small enough to be to-par
+  if (p.score !== undefined && p.score !== null) {
+    const s = String(p.score).trim();
+    if (s === 'E') return 0;
+    if (s.startsWith('+') || s.startsWith('-')) {
+      const n = parseFloat(s);
+      if (!isNaN(n)) return n;
+    }
     const n = parseFloat(s);
-    return isNaN(n) ? null : n;
+    // Raw stroke totals are 60-80+; to-par at Augusta is -25 to +10 range
+    if (!isNaN(n) && Math.abs(n) <= 25) return n;
   }
   return null;
 }
 
-function readToday(p) {
+// Read today's round score to par.
+// Checks statistics array first (ESPN stores it as "today" or "roundScore" stat),
+// then direct fields, then falls back to linescores with par-72 conversion.
+function readRoundScore(p) {
+  // 1. statistics array
+  if (Array.isArray(p.statistics)) {
+    for (const stat of p.statistics) {
+      const sn = (stat.name || '').toLowerCase().replace(/[_\s]/g, '');
+      if (['today', 'roundscore', 'round', 'roundtopar', 'currentround'].includes(sn)) {
+        if (stat.value !== undefined) {
+          const n = parseFloat(stat.value);
+          if (!isNaN(n)) return n;
+        }
+        if (stat.displayValue) {
+          const n = parseFloat(stat.displayValue.replace('E','0').replace('+',''));
+          if (!isNaN(n)) return n;
+        }
+      }
+    }
+  }
+  // 2. direct fields
   if (p.today !== undefined && p.today !== null) {
-    const n = parseFloat(p.today);
+    const n = parseFloat(String(p.today).replace('E','0').replace('+',''));
     return isNaN(n) ? null : n;
   }
   if (p.displayToday) {
-    const s = p.displayToday.replace('+', '').replace('E', '0');
-    return parseFloat(s) || null;
+    const n = parseFloat(p.displayToday.replace('E','0').replace('+',''));
+    return isNaN(n) ? null : n;
   }
-  // Last linescore
+  // 3. last linescore — if raw strokes (>50), subtract par 72; if already to-par, use directly
   if (Array.isArray(p.linescores) && p.linescores.length) {
     const last = p.linescores[p.linescores.length - 1];
-    const n = parseFloat(last?.value ?? last?.displayValue ?? '');
-    return isNaN(n) ? null : n;
+    const raw  = parseFloat(last?.value ?? last?.displayValue ?? '');
+    if (!isNaN(raw)) return raw > 50 ? raw - 72 : raw;
+  }
+  return null;
+}
+
+// Read display position from multiple ESPN response shapes
+function readDisplayPos(p) {
+  if (p.displayPosition) return p.displayPosition;
+  // statistics array
+  if (Array.isArray(p.statistics)) {
+    const stat = p.statistics.find(s => (s.name || '').toLowerCase() === 'position');
+    if (stat?.displayValue) return stat.displayValue;
+  }
+  // status description
+  const desc = p.status?.type?.description || p.status?.displayValue || '';
+  if (/^(T?\d+|MC|WD|CUT|DQ)$/i.test(desc)) return desc;
+  // position field
+  if (p.position) {
+    if (typeof p.position === 'object') return p.position.displayName || String(p.position.id || '');
+    return String(p.position);
   }
   return null;
 }
@@ -923,9 +990,8 @@ function readToday(p) {
 function readThru(p) {
   if (p.thru !== undefined && p.thru !== null) return String(p.thru);
   if (p.displayThru) return p.displayThru;
-  // Check statistics array
   if (Array.isArray(p.statistics)) {
-    const t = p.statistics.find(s => s.name === 'thru' || s.abbreviation === 'THRU');
+    const t = p.statistics.find(s => (s.name || '').toLowerCase() === 'thru' || s.abbreviation === 'THRU');
     if (t) return String(t.displayValue ?? t.value ?? '');
   }
   return null;
