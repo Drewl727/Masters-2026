@@ -564,7 +564,7 @@ function calcProb(bet, data) {
 
   switch (bet.market) {
     case 'outright': {
-      if (numPos === 1) return 95;
+      // Linear shots-back decay: 0 back ≈ 90%, 4 back in R2 ≈ 45%
       const maxShots = { r1:12, r2:8, r3:5, r4:2 };
       const max = maxShots[tRound] || 12;
       return Math.max(0, Math.round((1 - shotsBack / max) * 90));
@@ -572,15 +572,23 @@ function calcProb(bet, data) {
     case 'top5':
     case 'top10':
     case 'top20': {
-      const t = { top5:5, top10:10, top20:20 };
-      const target = t[bet.market];
-      if (numPos <= target) return 95;
-      const prob = (target / numPos) * (roundsLeft / 3) * 100;
-      return Math.max(0, Math.min(90, Math.round(prob)));
+      const targets = { top5:5, top10:10, top20:20 };
+      const target = targets[bet.market];
+      if (numPos <= target) {
+        // In position — confidence increases the deeper into the tournament we are
+        return Math.min(92, 60 + rn * 10);
+      }
+      // Outside position — exponential decay by spots needed vs. rounds remaining
+      const extraSpots = numPos - target;
+      const reach = roundsLeft * 5.5;
+      if (reach <= 0) return 0;
+      return Math.max(1, Math.min(88, Math.round(72 * Math.exp(-extraSpots / reach))));
     }
     case 'makecut':
       if (rn >= 3) return missedCut ? 0 : 99;
-      return 72;
+      if (numPos <= 50) return 85;
+      if (numPos <= 65) return 60;
+      return 35;
   }
   return 50;
 }

@@ -759,6 +759,8 @@ function parseNumPos(pos) {
 // ============================================================
 // Probability a bet cashes based on current position and rounds remaining.
 // Used both to decide DEAD threshold and to display on ALIVE bets.
+// Outputs a "bet viability" score (0-95), not a strict historical probability.
+// Calibrated so that being ~4 shots back from leader midway through ≈ 45% outright viability.
 function calcProb(bet, data) {
   if (!data) return 50;
   const { numPos, missedCut, withdrawn, shotsBack } = data;
@@ -774,8 +776,8 @@ function calcProb(bet, data) {
 
   switch (bet.market) {
     case 'outright': {
-      if (numPos === 1) return 95;
-      // Shots-back model: the further back, the worse the odds
+      // Linear shots-back decay, calibrated: 0 back ≈ 90%, 4 back in R2 ≈ 45%
+      // maxShots = hard cutoff where viability hits 0 (comeback is essentially impossible)
       const maxShots = { r1:12, r2:8, r3:5, r4:2 };
       const max = maxShots[tRound] || 12;
       return Math.max(0, Math.round((1 - shotsBack / max) * 90));
@@ -783,16 +785,27 @@ function calcProb(bet, data) {
     case 'top5':
     case 'top10':
     case 'top20': {
-      const t = { top5:5, top10:10, top20:20 };
-      const target = t[bet.market];
-      if (numPos <= target) return 95;
-      // posRatio × rounds-remaining factor
-      const prob = (target / numPos) * (roundsLeft / 3) * 100;
-      return Math.max(0, Math.min(90, Math.round(prob)));
+      const targets = { top5:5, top10:10, top20:20 };
+      const target = targets[bet.market];
+      if (numPos <= target) {
+        // In position — confidence increases the deeper into the tournament we are.
+        // R1: 70%, R2: 80%, R3: 90% (R4/complete handled above)
+        return Math.min(92, 60 + rn * 10);
+      }
+      // Outside position — exponential decay based on spots needed vs. rounds remaining.
+      // "reach" = how many positions a player can realistically climb in remaining rounds.
+      // Empirically ~5.5 spots/round of movement at Augusta; decays sharply past that.
+      const extraSpots = numPos - target;
+      const reach = roundsLeft * 5.5;
+      if (reach <= 0) return 0;
+      return Math.max(1, Math.min(88, Math.round(72 * Math.exp(-extraSpots / reach))));
     }
     case 'makecut':
       if (rn >= 3) return missedCut ? 0 : 99;
-      return 72; // pre-cut: decent base chance
+      // Pre-cut: use current position as proxy for cut proximity
+      if (numPos <= 50) return 85;
+      if (numPos <= 65) return 60;
+      return 35;
   }
   return 50;
 }
