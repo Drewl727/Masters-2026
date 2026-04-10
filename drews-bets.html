@@ -681,7 +681,8 @@ function parseESPN(data) {
     if (s !== null && s < leaderScore) leaderScore = s;
   });
 
-  const updated = {};
+  // Pass 1: collect raw data
+  const rawData = {};
   players.forEach(p => {
     const name = p.displayName || p.athlete?.displayName || p.name || '';
     const key  = matchPlayer(name);
@@ -694,11 +695,37 @@ function parseESPN(data) {
     const withdrawn = rawStatus.includes('wd') || rawStatus.includes('withdraw');
     const today     = readRoundScore(p);
     const thru      = readThru(p);
-    const numPos    = missedCut || withdrawn ? 999 : parseNumPos(rawPos);
-    const shotsBack = score !== null && leaderScore !== Infinity ? Math.max(0, score - leaderScore) : 0;
+    const sortOrder = typeof p.sortOrder === 'number' ? p.sortOrder : 9999;
 
-    updated[key] = { pos: missedCut ? 'MC' : withdrawn ? 'WD' : (rawPos || '—'), numPos, score, today, thru, missedCut, withdrawn, shotsBack };
+    rawData[key] = { rawPos, sortOrder, score, today, thru, missedCut, withdrawn };
     if (tRound === 'pre' && score !== null) tRound = 'r1';
+  });
+
+  // Pass 2: derive display position from sortOrder when ESPN omits displayPosition
+  const scoreMinOrder = {};
+  const scoreCount    = {};
+  Object.values(rawData).forEach(({ score, sortOrder, missedCut, withdrawn }) => {
+    if (score !== null && !missedCut && !withdrawn) {
+      if (scoreMinOrder[score] === undefined || sortOrder < scoreMinOrder[score])
+        scoreMinOrder[score] = sortOrder;
+      scoreCount[score] = (scoreCount[score] || 0) + 1;
+    }
+  });
+
+  const updated = {};
+  Object.entries(rawData).forEach(([key, d]) => {
+    let displayPos = d.rawPos;
+    if (!displayPos && !d.missedCut && !d.withdrawn && d.score !== null) {
+      const rank  = scoreMinOrder[d.score];
+      const count = scoreCount[d.score] || 1;
+      displayPos  = count > 1 ? `T${rank}` : `${rank}`;
+    }
+
+    const pos       = d.missedCut ? 'MC' : d.withdrawn ? 'WD' : (displayPos || '—');
+    const numPos    = d.missedCut || d.withdrawn ? 999 : parseNumPos(displayPos);
+    const shotsBack = d.score !== null && leaderScore !== Infinity ? Math.max(0, d.score - leaderScore) : 0;
+
+    updated[key] = { pos, numPos, score: d.score, today: d.today, thru: d.thru, missedCut: d.missedCut, withdrawn: d.withdrawn, shotsBack };
   });
 
   leaderboard = { ...leaderboard, ...updated };
