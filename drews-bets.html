@@ -194,6 +194,24 @@
   .s-dead    { border-color:rgba(192,57,43,.35); }
   .s-dead .sval    { color:var(--red-soft); }
 
+  /* ── NET PROFIT BAR ── */
+  .net-bar {
+    display:grid; grid-template-columns:1fr 1fr; gap:10px;
+    margin-bottom:20px;
+  }
+  .net-card {
+    background:var(--bg-card); border:1px solid var(--border); border-radius:6px;
+    padding:16px 14px; text-align:center;
+  }
+  .net-card .slabel { font-family:'Oswald',sans-serif; font-size:.68rem; text-transform:uppercase; letter-spacing:1.5px; color:var(--text-dim); margin-bottom:5px; }
+  .net-card .sval { font-family:'JetBrains Mono',monospace; font-size:1.8rem; font-weight:600; line-height:1; }
+  .net-card .ssub { font-family:'JetBrains Mono',monospace; font-size:.72rem; color:var(--text-dim); margin-top:6px; }
+  .net-pos { border-color:rgba(39,174,96,.4); }
+  .net-pos .sval { color:var(--positive); }
+  .net-neg { border-color:rgba(192,57,43,.4); }
+  .net-neg .sval { color:var(--red-soft); }
+  .net-even .sval { color:var(--text-dim); }
+
   /* ── SECTION HEADER ── */
   .section-header {
     font-family:'Oswald',sans-serif; font-size:1.15rem; font-weight:600;
@@ -401,6 +419,20 @@
     </div>
   </div>
 
+  <!-- Net Profit -->
+  <div class="net-bar">
+    <div class="net-card net-even" id="netCard">
+      <div class="slabel">Net Profit</div>
+      <div class="sval" id="netProfit">—</div>
+      <div class="ssub" id="netProfitSub">if standings hold</div>
+    </div>
+    <div class="net-card net-even" id="netUnitCard">
+      <div class="slabel">Net ROI</div>
+      <div class="sval" id="netROI">—</div>
+      <div class="ssub" id="netROISub">return on $105 risked</div>
+    </div>
+  </div>
+
   <!-- Player Tracker -->
   <div class="section-header">
     <span>Player Tracker</span>
@@ -564,10 +596,16 @@ function calcProb(bet, data) {
 
   switch (bet.market) {
     case 'outright': {
-      // Linear shots-back decay: 0 back ≈ 90%, 4 back in R2 ≈ 45%
-      const maxShots = { r1:12, r2:8, r3:5, r4:2 };
-      const max = maxShots[tRound] || 12;
-      return Math.max(0, Math.round((1 - shotsBack / max) * 90));
+      // Must account for both shots back AND position — T19 even 4 back is near zero
+      if (numPos > 15 && rn >= 2) return 0;
+      if (numPos > 25) return 1;
+      const maxShots = { r1:10, r2:6, r3:4, r4:2 };
+      const max = maxShots[tRound] || 10;
+      if (shotsBack >= max) return 0;
+      const shotsFactor = Math.max(0, 1 - shotsBack / max);
+      // Penalize heavily for position — many players ahead means low win chance
+      const posFactor = Math.max(0, 1 - (numPos - 1) / (roundsLeft >= 3 ? 15 : roundsLeft >= 2 ? 10 : 5));
+      return Math.max(0, Math.min(85, Math.round(shotsFactor * posFactor * 80)));
     }
     case 'top5':
     case 'top10':
@@ -575,14 +613,17 @@ function calcProb(bet, data) {
       const targets = { top5:5, top10:10, top20:20 };
       const target = targets[bet.market];
       if (numPos <= target) {
-        // In position — confidence increases the deeper into the tournament we are
-        return Math.min(92, 60 + rn * 10);
+        // In position — confidence scales with how deep into the tournament
+        return Math.min(95, 45 + rn * 14);
       }
-      // Outside position — exponential decay by spots needed vs. rounds remaining
+      // Outside position — steeper decay, less generous reach
       const extraSpots = numPos - target;
-      const reach = roundsLeft * 5.5;
+      const reach = roundsLeft * 3;
       if (reach <= 0) return 0;
-      return Math.max(1, Math.min(88, Math.round(72 * Math.exp(-extraSpots / reach))));
+      const base = Math.round(55 * Math.exp(-extraSpots / reach));
+      // Cap based on how far out they are
+      const cap = extraSpots > 20 ? 5 : extraSpots > 10 ? 20 : 60;
+      return Math.max(0, Math.min(cap, base));
     }
     case 'makecut':
       if (rn >= 3) return missedCut ? 0 : 99;
@@ -606,11 +647,14 @@ function getStatus(bet, data) {
   }
 
   const targets = { outright:1, top5:5, top10:10, top20:20 };
+  // Only mark "cashing" in R3+ when position is meaningful, or R4 for outright
   if (bet.market === 'makecut' && rn >= 3) return 'cashing';
-  if (numPos <= (targets[bet.market] || 999)) return 'cashing';
+  if (bet.market === 'outright' && numPos === 1 && rn >= 4) return 'cashing';
+  if (bet.market !== 'outright' && numPos <= (targets[bet.market] || 999) && rn >= 3) return 'cashing';
 
   const prob = calcProb(bet, data);
-  if (prob < 8 && rn >= 2) return 'dead';
+  if (prob <= 0) return 'dead';
+  if (prob < 5) return 'dead';
 
   return 'alive';
 }
@@ -681,7 +725,7 @@ function parseESPN(data) {
 
   if (state === 'pre')       { tRound = 'pre'; tComplete = false; }
   else if (state === 'post') { tRound = 'complete'; tComplete = true; }
-  else if (period >= 1 && period <= 4) { tRound = `r${period}`; }
+  else if (period >= 1 && period <= 4) { tRound = `r${period}`; tComplete = false; }
 
   let leaderScore = Infinity;
   players.forEach(p => {
@@ -852,6 +896,36 @@ function renderSummary() {
 
   document.getElementById('statDead').textContent     = dead.length  ? `-$${deadStake}`  : '$0';
   document.getElementById('statDeadSub').textContent  = `${dead.length} ticket${dead.length!==1?'s':''} lost`;
+
+  // Net profit: cashing profit minus dead stakes (what you'd walk away with if standings hold)
+  const netDollars = cashProfit - deadStake;
+  const netEl   = document.getElementById('netProfit');
+  const netCard = document.getElementById('netCard');
+  const netSub  = document.getElementById('netProfitSub');
+  if (tRound === 'pre') {
+    netEl.textContent = '—';
+    netCard.className = 'net-card net-even';
+    netSub.textContent = 'waiting for R1';
+  } else {
+    netEl.textContent = netDollars >= 0 ? `+$${netDollars}` : `-$${Math.abs(netDollars)}`;
+    netCard.className = `net-card ${netDollars > 0 ? 'net-pos' : netDollars < 0 ? 'net-neg' : 'net-even'}`;
+    netSub.textContent = tComplete ? 'final result' : `if standings hold · ${alive.length} still alive`;
+  }
+
+  // ROI: net / total staked
+  const roiPct = ((netDollars / TOTAL_STAKE) * 100).toFixed(1);
+  const roiEl   = document.getElementById('netROI');
+  const roiCard = document.getElementById('netUnitCard');
+  const roiSub  = document.getElementById('netROISub');
+  if (tRound === 'pre') {
+    roiEl.textContent = '—';
+    roiCard.className = 'net-card net-even';
+    roiSub.textContent = `$${TOTAL_STAKE} at risk`;
+  } else {
+    roiEl.textContent = `${roiPct}%`;
+    roiCard.className = `net-card ${netDollars > 0 ? 'net-pos' : netDollars < 0 ? 'net-neg' : 'net-even'}`;
+    roiSub.textContent = tComplete ? `on $${TOTAL_STAKE} risked` : `on $${TOTAL_STAKE} · ${alive.length} pending`;
+  }
 
   const pl = document.getElementById('payoutLabel');
   pl.style.color = cash.length ? 'var(--positive)' : 'var(--text-dim)';
